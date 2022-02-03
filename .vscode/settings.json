@@ -1,0 +1,22 @@
+{
+  "editor.formatOnSave": true,
+  "rust-analyzer.assist.importEnforceGranularity": true,
+  "rust-analyzer.assist.importGranularity": "module",
+  "rust-analyzer.checkOnSave.allFeatures": false,
+  "rust-analyzer.checkOnSave.allTargets": false,
+  "rust-analyzer.checkOnSave.command": "clippy",
+  "rust-analyzer.cargo.noDefaultFeatures": true,
+  "rust-analyzer.experimental.procAttrMacros": false,
+  "rust-analyzer.checkOnSave.noDefaultFeatures": true,
+  "rust-analyzer.cargo.target": "thumbv6m-none-eabi",
+  "rust-analyzer.cargo.features": [],
+  "rust-analyzer.linkedProjects": [],
+  "rust-analyzer.procMacro.enable": true,
+  "rust-analyzer.cargo.runBuildScripts": true,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/target/**": true
+  },
+  "git.ignoreLimitWarning": true
+}

@@ -1,0 +1,30 @@
+[package]
+name = "rp2040-embassy-example"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.7.3"
+cortex-m-rt = "0.7.0"
+embedded-hal    = "0.2.6"
+rp2040-pac2 = { git = "https://github.com/embassy-rs/rp2040-pac2", rev="9ad7223a48a065e612bc7dc7be5bf5bd0b41cfc4", features = ["rt"] }
+
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt = "0.3"
+defmt-rtt = "0.3"
+log = { version = "0.4.14", optional = true }
+
+atomic-polyfill = "0.1.5"
+futures = { version = "0.3.17", default-features = false, features = ["async-await", "cfg-target-has-atomic", "unstable"] }
+critical-section = "0.2.5"
+
+embassy = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+embassy-rp = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+embassy-hal-common = {git = "https://github.com/embassy-rs/embassy" }
+embassy-macros = {git = "https://github.com/embassy-rs/embassy", features = ["rp"]}
+
+
+
+
