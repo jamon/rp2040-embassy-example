@@ -1,8 +1,8 @@
-# `pico-rtic-example`
+# `rp2040-embassy-example`
 
 > Example project for Raspberry Pi PICO that uses [embassy](https://github.com/embassy-rs/embassy/) and [defmt](https://github.com/knurling-rs/defmt)
 
-Based on examples from within the embassy project.  See also [defmt-app-template](https://github.com/rtic-rs/defmt-app-template)
+Based on examples from within the embassy project.
 
 ## Hardware Setup
   - Program a Raspberry Pi PICO to be a CMSIS-DAP probe using [DapperMime](https://github.com/majbthrd/DapperMime)
@@ -56,7 +56,6 @@ That's about it!
 High-level documentation:
   - [rust book](https://doc.rust-lang.org/book/)
   - [rust embedded book](https://rust-embedded.github.io/book)
-  - [rtic by example book](https://rtic.rs/1.0/book/en/preface.html)
 
 Setup Guide for rp-rs (covers getting rust running on the pi pico or similar boards, including probe-run, elf2uf2-rs, etc)
   - [rp-rs README.md](https://github.com/rp-rs/rp-hal)
