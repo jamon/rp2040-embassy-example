@@ -7,9 +7,11 @@ mod example_common;
 
 use defmt::*;
 use embassy::executor::Spawner;
+use embassy::time::{Duration, Timer};
 use embassy_rp::gpio::NoPin;
 use embassy_rp::spi;
 use embassy_rp::spi::Spi;
+
 use embassy_rp::{gpio, Peripherals};
 use gpio::{Level, Output};
 
@@ -42,5 +44,6 @@ async fn main(_spawner: Spawner, p: Peripherals) {
         let y = (buf[4] as u32) << 5 | (buf[5] as u32) >> 3;
 
         info!("touch: {=u32} {=u32}", x, y);
+        Timer::after(Duration::from_secs(1)).await;
     }
 }
