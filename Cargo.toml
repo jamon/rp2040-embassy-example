@@ -24,7 +24,8 @@ embassy = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
 embassy-rp = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
 embassy-hal-common = {git = "https://github.com/embassy-rs/embassy" }
 embassy-macros = {git = "https://github.com/embassy-rs/embassy", features = ["rp"]}
-
+embassy-lora = { git = "https://github.com/embassy-rs/embassy", features = ["sx127x"]}
+embedded-hal-async = { version = "0.0.1", git = "https://github.com/embassy-rs/embedded-hal", branch = "embassy"}
 
 
 
