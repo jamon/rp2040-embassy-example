@@ -1,29 +1,65 @@
 [package]
 name = "rp2040-embassy-example"
-version = "0.1.0"
-edition = "2018"
+version = "0.1.1"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cortex-m = "0.7.3"
-cortex-m-rt = "0.7.0"
-embedded-hal    = "0.2.6"
-rp2040-pac2 = { git = "https://github.com/embassy-rs/rp2040-pac2", rev="9ad7223a48a065e612bc7dc7be5bf5bd0b41cfc4", features = ["rt"] }
+embassy-sync = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt", "nightly"] }
+embassy-executor = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt", "integrated-timers", "nightly"] }
+embassy-time = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt", "defmt-timestamp-uptime", "nightly"] }
+embassy-rp = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt", "unstable-traits", "nightly", "unstable-pac", "time-driver", "pio", "nightly"] }
+embassy-usb = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt"] }
+embassy-net = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b", features = ["defmt", "nightly", "tcp", "dhcpv4", "medium-ethernet", "pool-16", "nightly"] }
+embassy-futures = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b" }
+embassy-usb-logger = { git = "https://github.com/fluffware/embassy.git", rev = "2bb58d11db6bffc55839579c71b6cd0119b2af2b" }
 
-panic-probe = { version = "0.3", features = ["print-defmt"] }
 defmt = "0.3"
 defmt-rtt = "0.3"
-log = { version = "0.4.14", optional = true }
-
-atomic-polyfill = "0.1.5"
+pio = "0.2"
+pio-proc = "0.2"
+cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.0"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 futures = { version = "0.3.17", default-features = false, features = ["async-await", "cfg-target-has-atomic", "unstable"] }
-critical-section = "0.2.5"
+display-interface-spi = "0.4.1"
+embedded-graphics = "0.7.1"
+st7789 = "0.6.1"
+display-interface = "0.4.1"
+byte-slice-cast = { version = "1.2.0", default-features = false }
 
-embassy = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
-embassy-rp = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
-embassy-hal-common = {git = "https://github.com/embassy-rs/embassy" }
-embassy-macros = {git = "https://github.com/embassy-rs/embassy", features = ["rp"]}
+embedded-hal-1 = { package = "embedded-hal", version = "=1.0.0-alpha.9" }
+embedded-hal-async = "0.2.0-alpha.0"
+embedded-io = { version = "0.4.0", features = ["async", "defmt"] }
+embedded-storage = { version = "0.3" }
+static_cell = "1.0.0"
+log = "0.4"
+
+[profile.release]
+debug = true
+
+[patch.crates-io]
+pio = {git = "https://github.com/rp-rs/pio-rs.git"}
+
+# cortex-m = "0.7.3"
+# cortex-m-rt = "0.7.0"
+# embedded-hal    = "0.2.6"
+# rp2040-pac2 = { git = "https://github.com/embassy-rs/rp2040-pac2", rev="9ad7223a48a065e612bc7dc7be5bf5bd0b41cfc4", features = ["rt"] }
+
+# panic-probe = { version = "0.3", features = ["print-defmt"] }
+# defmt = "0.3"
+# defmt-rtt = "0.3"
+# log = { version = "0.4.14", optional = true }
+
+# atomic-polyfill = "0.1.5"
+# futures = { version = "0.3.17", default-features = false, features = ["async-await", "cfg-target-has-atomic", "unstable"] }
+# critical-section = "0.2.5"
+
+# embassy = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+# embassy-rp = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+# embassy-hal-common = {git = "https://github.com/embassy-rs/embassy" }
+# embassy-macros = {git = "https://github.com/embassy-rs/embassy", features = ["rp"]}
 
 
 
