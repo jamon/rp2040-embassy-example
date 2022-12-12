@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{AnyPin, Level, Output, Pin};
-use embassy_rp::pio::{Pio0, PioPeripherial, PioStateMachine, PioStateMachineInstance, Sm0};
+use embassy_rp::pio::{Pio0, PioPeripherial, PioStateMachine, PioStateMachineInstance, Sm0, Sm1};
 use embassy_rp::relocate::RelocatedProgram;
 use embassy_rp::spi::{Blocking, Spi};
 use embassy_rp::{pio_instr_util, spi};
@@ -26,7 +26,7 @@ mod shared_spi;
 mod touch;
 
 #[embassy_executor::task]
-async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm0>, pin: AnyPin) {
+async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm1>, pin: AnyPin) {
     // Setup sm2
 
     // blink
@@ -67,6 +67,82 @@ async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm0>, pin: AnyPin)
     //     sm.wait_irq(3).await;
     //     info!("IRQ trigged");
     // }
+}
+
+#[embassy_executor::task]
+async fn pio_task_quadrature(mut sm: PioStateMachineInstance<Pio0, Sm0>, a_pin: AnyPin, b_pin: AnyPin) {
+    info!("preparing quadrature encoder pio");
+
+    let prg = pio_proc::pio_asm!(
+        "
+.origin 12
+start:
+    wait 0 pin 0            ; wait for B == 0
+    jmp pin, wait_high      ; if A == 0
+    mov x, !x                   ; x++ {
+    jmp x--, nop1               ;
+nop1:                           ;
+    mov x, !x                   ; }
+; BUG?!?! NO JMP OVER ELSE HERE?!  somehow it works though!?
+wait_high:
+    jmp x--, nop2           ; x-- {
+nop2:                       ; }
+
+    wait 1 pin 0            ; wait for B == 1
+    jmp pin, wait_low       ; if A == 0
+    jmp x--, nop3               ; x-- {
+nop3:                           ; }
+wait_low:                   ; else
+    mov x, !x                   ; x++ {
+    jmp x--, nop4               ;
+nop4:                           ;
+    mov x, !x                   ;
+    jmp start                   ; }
+        "
+    );
+
+    let relocated = RelocatedProgram::new(&prg.program);
+    let in_pin = sm.make_pio_pin(b_pin);
+    let jmp_pin = sm.make_pio_pin(a_pin);
+    sm.set_in_base_pin(&in_pin);
+
+    sm.set_jmp_pin(jmp_pin.pin());
+    sm.set_in_shift_dir(embassy_rp::pio::ShiftDirection::Left);
+    sm.set_push_threshold(32);
+    sm.set_autopush(true);
+
+    // sm.set_
+    sm.write_instr(relocated.origin() as usize, relocated.code());
+    pio_instr_util::exec_jmp(&mut sm, relocated.origin());
+    // sm.set_clkdiv(0);
+    sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
+
+    let pio::Wrap { source, target } = relocated.wrap();
+    sm.set_wrap(source, target);
+
+    //     sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
+    sm.set_enable(true);
+    info!("started rotary encoder");
+
+    let instr = &pio::Instruction {
+        operands: pio::InstructionOperands::IN {
+            source: (pio::InSource::X),
+            bit_count: 32,
+        },
+        delay: 0,
+        side_set: None,
+    };
+
+    let instruction_in_x_32 = instr.encode(pio::SideSet::default());
+    loop {
+        sm.exec_instr(instruction_in_x_32);
+        let rx = sm.wait_pull().await;
+        info!("Pulled {} from FIFO", rx);
+        Timer::after(Duration::from_secs(1)).await;
+
+        //     sm.wait_irq(3).await;
+        //     info!("IRQ trigged");
+    }
 }
 
 // #[embassy_executor::task]
@@ -164,10 +240,13 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let pio = p.PIO0;
 
-    let (_, sm0, ..) = pio.split();
+    let (_, sm0, sm1, ..) = pio.split();
 
-    spawner.spawn(pio_task_blink(sm0, p.PIN_25.degrade())).unwrap();
-
+    spawner.spawn(pio_task_blink(sm1, p.PIN_25.degrade())).unwrap();
+    info!("spawning quadrature task");
+    spawner
+        .spawn(pio_task_quadrature(sm0, p.PIN_2.degrade(), p.PIN_3.degrade()))
+        .unwrap();
     let rst = p.PIN_15;
     let display_cs = p.PIN_9;
     let dcx = p.PIN_8;
@@ -232,7 +311,7 @@ async fn main(spawner: Spawner) {
         // alt_color = !alt_color;
         x = 40;
 
-        // Timer::after(Duration::from_secs(1)).await;
+        Timer::after(Duration::from_secs(1)).await;
     }
     // spawner.spawn(pio_task_sm0(sm0, p.PIN_0.degrade())).unwrap();
     // spawner.spawn(pio_task_sm1(sm1)).unwrap();
