@@ -16,11 +16,14 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics::text::Text;
+use my_display_interface::SPIDeviceInterface;
+use shared_spi::SpiDeviceWithCs;
 use st7789::{Orientation, ST7789};
 use {defmt_rtt as _, panic_probe as _};
 
-use crate::my_display_interface::SPIDeviceInterface;
-use crate::shared_spi::SpiDeviceWithCs;
+mod my_display_interface;
+mod shared_spi;
+mod touch;
 
 #[embassy_executor::task]
 async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm0>, pin: AnyPin) {
@@ -176,6 +179,7 @@ async fn main(spawner: Spawner) {
     let mut config = spi::Config::default();
     config.phase = spi::Phase::CaptureOnSecondTransition;
     config.polarity = spi::Polarity::IdleHigh;
+    config.frequency = 50_000_000;
     let spi: Spi<'_, _, Blocking> = Spi::new_blocking(p.SPI1, clk, mosi, miso, config);
     let spi_bus = RefCell::new(spi);
 
@@ -194,310 +198,43 @@ async fn main(spawner: Spawner) {
 
     display.clear(Rgb565::BLACK).unwrap();
 
-    let style = MonoTextStyle::new(&FONT_10X20, Rgb565::GREEN);
-    Text::new(
-        "Hello embedded_graphics \n + embassy + RP2040!",
-        Point::new(20, 200),
-        style,
-    )
-    .draw(&mut display)
-    .unwrap();
+    let style_green = MonoTextStyle::new(&FONT_10X20, Rgb565::GREEN);
+    let style_red = MonoTextStyle::new(&FONT_10X20, Rgb565::RED);
+    let my_str = "MERRY CHRISTMAS";
+    let mut x = 40;
+    let mut alt_color = false;
+
+    // Text::new("MERRY CHRISTMAS\n", Point::new(0, 20), style_green)
+    //     .draw(&mut display)
+    //     .unwrap();
 
     loop {
-        Timer::after(Duration::from_secs(2)).await;
+        // Text::new("MERRY CHRISTMAS\n", Point::new(0, 20), style_green)
+        //     .draw(&mut display)
+        //     .unwrap();
+        // Timer::after(Duration::from_secs(1)).await;
+        // Text::new("MERRY CHRISTMAS\n", Point::new(0, 20), style_red)
+        //     .draw(&mut display)
+        //     .unwrap();
+        for (i, c) in my_str.chars().enumerate() {
+            let mut tmp = [0u8; 4];
+            let letter = c.encode_utf8(&mut tmp);
+            Text::new(
+                letter,
+                Point::new(x, 20),
+                if alt_color { style_red } else { style_green },
+            )
+            .draw(&mut display)
+            .unwrap();
+            alt_color = !alt_color;
+            x += 10;
+        }
+        // alt_color = !alt_color;
+        x = 40;
+
+        // Timer::after(Duration::from_secs(1)).await;
     }
     // spawner.spawn(pio_task_sm0(sm0, p.PIN_0.degrade())).unwrap();
     // spawner.spawn(pio_task_sm1(sm1)).unwrap();
     // spawner.spawn(pio_task_sm2(sm2)).unwrap();
-}
-
-mod shared_spi {
-    use core::cell::RefCell;
-    use core::fmt::Debug;
-
-    use embedded_hal_1::digital::OutputPin;
-    use embedded_hal_1::spi;
-    use embedded_hal_1::spi::SpiDevice;
-
-    #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-    pub enum SpiDeviceWithCsError<BUS, CS> {
-        #[allow(unused)] // will probably use in the future when adding a flush() to SpiBus
-        Spi(BUS),
-        Cs(CS),
-    }
-
-    impl<BUS, CS> spi::Error for SpiDeviceWithCsError<BUS, CS>
-    where
-        BUS: spi::Error + Debug,
-        CS: Debug,
-    {
-        fn kind(&self) -> spi::ErrorKind {
-            match self {
-                Self::Spi(e) => e.kind(),
-                Self::Cs(_) => spi::ErrorKind::Other,
-            }
-        }
-    }
-
-    pub struct SpiDeviceWithCs<'a, BUS, CS> {
-        bus: &'a RefCell<BUS>,
-        cs: CS,
-    }
-
-    impl<'a, BUS, CS> SpiDeviceWithCs<'a, BUS, CS> {
-        pub fn new(bus: &'a RefCell<BUS>, cs: CS) -> Self {
-            Self { bus, cs }
-        }
-    }
-
-    impl<'a, BUS, CS> spi::ErrorType for SpiDeviceWithCs<'a, BUS, CS>
-    where
-        BUS: spi::ErrorType,
-        CS: OutputPin,
-    {
-        type Error = SpiDeviceWithCsError<BUS::Error, CS::Error>;
-    }
-
-    impl<'a, BUS, CS> SpiDevice for SpiDeviceWithCs<'a, BUS, CS>
-    where
-        BUS: spi::SpiBusFlush,
-        CS: OutputPin,
-    {
-        type Bus = BUS;
-
-        fn transaction<R>(
-            &mut self,
-            f: impl FnOnce(&mut Self::Bus) -> Result<R, BUS::Error>,
-        ) -> Result<R, Self::Error> {
-            let mut bus = self.bus.borrow_mut();
-            self.cs.set_low().map_err(SpiDeviceWithCsError::Cs)?;
-
-            let f_res = f(&mut bus);
-
-            // On failure, it's important to still flush and deassert CS.
-            let flush_res = bus.flush();
-            let cs_res = self.cs.set_high();
-
-            let f_res = f_res.map_err(SpiDeviceWithCsError::Spi)?;
-            flush_res.map_err(SpiDeviceWithCsError::Spi)?;
-            cs_res.map_err(SpiDeviceWithCsError::Cs)?;
-
-            Ok(f_res)
-        }
-    }
-}
-
-/// Driver for the XPT2046 resistive touchscreen sensor
-mod touch {
-    use embedded_hal_1::spi::{SpiBus, SpiBusRead, SpiBusWrite, SpiDevice};
-
-    struct Calibration {
-        x1: i32,
-        x2: i32,
-        y1: i32,
-        y2: i32,
-        sx: i32,
-        sy: i32,
-    }
-
-    const CALIBRATION: Calibration = Calibration {
-        x1: 3880,
-        x2: 340,
-        y1: 262,
-        y2: 3850,
-        sx: 320,
-        sy: 240,
-    };
-
-    pub struct Touch<SPI: SpiDevice> {
-        spi: SPI,
-    }
-
-    impl<SPI> Touch<SPI>
-    where
-        SPI: SpiDevice,
-        SPI::Bus: SpiBus,
-    {
-        pub fn new(spi: SPI) -> Self {
-            Self { spi }
-        }
-
-        pub fn read(&mut self) -> Option<(i32, i32)> {
-            let mut x = [0; 2];
-            let mut y = [0; 2];
-            self.spi
-                .transaction(|bus| {
-                    bus.write(&[0x90])?;
-                    bus.read(&mut x)?;
-                    bus.write(&[0xd0])?;
-                    bus.read(&mut y)?;
-                    Ok(())
-                })
-                .unwrap();
-
-            let x = (u16::from_be_bytes(x) >> 3) as i32;
-            let y = (u16::from_be_bytes(y) >> 3) as i32;
-
-            let cal = &CALIBRATION;
-
-            let x = ((x - cal.x1) * cal.sx / (cal.x2 - cal.x1)).clamp(0, cal.sx);
-            let y = ((y - cal.y1) * cal.sy / (cal.y2 - cal.y1)).clamp(0, cal.sy);
-            if x == 0 && y == 0 {
-                None
-            } else {
-                Some((x, y))
-            }
-        }
-    }
-}
-
-mod my_display_interface {
-    use display_interface::{DataFormat, DisplayError, WriteOnlyDataCommand};
-    use embedded_hal_1::digital::OutputPin;
-    use embedded_hal_1::spi::{SpiBusWrite, SpiDevice};
-
-    /// SPI display interface.
-    ///
-    /// This combines the SPI peripheral and a data/command pin
-    pub struct SPIDeviceInterface<SPI, DC> {
-        spi: SPI,
-        dc: DC,
-    }
-
-    impl<SPI, DC> SPIDeviceInterface<SPI, DC>
-    where
-        SPI: SpiDevice,
-        SPI::Bus: SpiBusWrite,
-        DC: OutputPin,
-    {
-        /// Create new SPI interface for communciation with a display driver
-        pub fn new(spi: SPI, dc: DC) -> Self {
-            Self { spi, dc }
-        }
-    }
-
-    impl<SPI, DC> WriteOnlyDataCommand for SPIDeviceInterface<SPI, DC>
-    where
-        SPI: SpiDevice,
-        SPI::Bus: SpiBusWrite,
-        DC: OutputPin,
-    {
-        fn send_commands(&mut self, cmds: DataFormat<'_>) -> Result<(), DisplayError> {
-            let r = self.spi.transaction(|bus| {
-                // 1 = data, 0 = command
-                if let Err(_) = self.dc.set_low() {
-                    return Ok(Err(DisplayError::DCError));
-                }
-
-                // Send words over SPI
-                send_u8(bus, cmds)?;
-
-                Ok(Ok(()))
-            });
-            r.map_err(|_| DisplayError::BusWriteError)?
-        }
-
-        fn send_data(&mut self, buf: DataFormat<'_>) -> Result<(), DisplayError> {
-            let r = self.spi.transaction(|bus| {
-                // 1 = data, 0 = command
-                if let Err(_) = self.dc.set_high() {
-                    return Ok(Err(DisplayError::DCError));
-                }
-
-                // Send words over SPI
-                send_u8(bus, buf)?;
-
-                Ok(Ok(()))
-            });
-            r.map_err(|_| DisplayError::BusWriteError)?
-        }
-    }
-
-    fn send_u8<T: SpiBusWrite>(spi: &mut T, words: DataFormat<'_>) -> Result<(), T::Error> {
-        match words {
-            DataFormat::U8(slice) => spi.write(slice),
-            DataFormat::U16(slice) => {
-                use byte_slice_cast::*;
-                spi.write(slice.as_byte_slice())
-            }
-            DataFormat::U16LE(slice) => {
-                use byte_slice_cast::*;
-                for v in slice.as_mut() {
-                    *v = v.to_le();
-                }
-                spi.write(slice.as_byte_slice())
-            }
-            DataFormat::U16BE(slice) => {
-                use byte_slice_cast::*;
-                for v in slice.as_mut() {
-                    *v = v.to_be();
-                }
-                spi.write(slice.as_byte_slice())
-            }
-            DataFormat::U8Iter(iter) => {
-                let mut buf = [0; 32];
-                let mut i = 0;
-
-                for v in iter.into_iter() {
-                    buf[i] = v;
-                    i += 1;
-
-                    if i == buf.len() {
-                        spi.write(&buf)?;
-                        i = 0;
-                    }
-                }
-
-                if i > 0 {
-                    spi.write(&buf[..i])?;
-                }
-
-                Ok(())
-            }
-            DataFormat::U16LEIter(iter) => {
-                use byte_slice_cast::*;
-                let mut buf = [0; 32];
-                let mut i = 0;
-
-                for v in iter.map(u16::to_le) {
-                    buf[i] = v;
-                    i += 1;
-
-                    if i == buf.len() {
-                        spi.write(&buf.as_byte_slice())?;
-                        i = 0;
-                    }
-                }
-
-                if i > 0 {
-                    spi.write(&buf[..i].as_byte_slice())?;
-                }
-
-                Ok(())
-            }
-            DataFormat::U16BEIter(iter) => {
-                use byte_slice_cast::*;
-                let mut buf = [0; 64];
-                let mut i = 0;
-                let len = buf.len();
-
-                for v in iter.map(u16::to_be) {
-                    buf[i] = v;
-                    i += 1;
-
-                    if i == len {
-                        spi.write(&buf.as_byte_slice())?;
-                        i = 0;
-                    }
-                }
-
-                if i > 0 {
-                    spi.write(&buf[..i].as_byte_slice())?;
-                }
-
-                Ok(())
-            }
-            _ => unimplemented!(),
-        }
-    }
 }
