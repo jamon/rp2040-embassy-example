@@ -247,10 +247,10 @@ async fn main(spawner: Spawner) {
     spawner
         .spawn(pio_task_quadrature(sm0, p.PIN_2.degrade(), p.PIN_3.degrade()))
         .unwrap();
-    let rst = p.PIN_15;
+    let rst = p.PIN_12;
     let display_cs = p.PIN_9;
-    let dcx = p.PIN_8;
-    let miso = p.PIN_12;
+    let dcx = p.PIN_13;
+    let miso = p.PIN_8;
     let mosi = p.PIN_11;
     let clk = p.PIN_10;
 
