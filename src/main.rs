@@ -1,8 +1,10 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+use core::borrow::Borrow;
 use core::cell::RefCell;
 
+use arrform::{arrform, ArrForm};
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{AnyPin, Level, Output, Pin};
@@ -10,9 +12,11 @@ use embassy_rp::pio::{Pio0, PioPeripherial, PioStateMachine, PioStateMachineInst
 use embassy_rp::relocate::RelocatedProgram;
 use embassy_rp::spi::{Blocking, Spi};
 use embassy_rp::{pio_instr_util, spi};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::mutex::Mutex;
 use embassy_time::{Delay, Duration, Timer};
 use embedded_graphics::mono_font::ascii::FONT_10X20;
-use embedded_graphics::mono_font::MonoTextStyle;
+use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics::text::Text;
@@ -20,30 +24,34 @@ use my_display_interface::SPIDeviceInterface;
 use shared_spi::SpiDeviceWithCs;
 use st7789::{Orientation, ST7789};
 use {defmt_rtt as _, panic_probe as _};
-
 mod my_display_interface;
 mod shared_spi;
 mod touch;
+
+static COUNTER: Mutex<ThreadModeRawMutex, i32> = Mutex::new(0);
 
 #[embassy_executor::task]
 async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm1>, pin: AnyPin) {
     // Setup sm2
 
     // blink
-    let prg = pio_proc::pio_asm!(
-        ".origin 0",
-        "set pindirs,1",
-        ".wrap_target",
-        "set pins,0 [31]",
-        "set pins,0 [31]",
-        "set pins,0 [31]",
-        "set pins,0 [31]",
-        "set pins,1 [31]",
-        "set pins,1 [31]",
-        "set pins,1 [31]",
-        "set pins,1 [31]",
-        ".wrap",
-    );
+    let prg = pio_proc::pio_file!("src/blink.pio");
+
+    // let prg = pio_proc::pio_file!("src/blink.pio");
+    // let prg = pio_proc::pio_asm!(
+    //     ".origin 0",
+    //     "set pindirs,1",
+    //     ".wrap_target",
+    //     "set pins,0 [31]",
+    //     "set pins,0 [31]",
+    //     "set pins,0 [31]",
+    //     "set pins,0 [31]",
+    //     "set pins,1 [31]",
+    //     "set pins,1 [31]",
+    //     "set pins,1 [31]",
+    //     "set pins,1 [31]",
+    //     ".wrap",
+    // );
     let relocated = RelocatedProgram::new(&prg.program);
     let out_pin = sm.make_pio_pin(pin);
     let pio_pins = [&out_pin];
@@ -52,56 +60,36 @@ async fn pio_task_blink(mut sm: PioStateMachineInstance<Pio0, Sm1>, pin: AnyPin)
 
     sm.write_instr(relocated.origin() as usize, relocated.code());
     pio_instr_util::exec_jmp(&mut sm, relocated.origin());
-    sm.set_clkdiv(0);
-    // sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
+    // sm.set_clkdiv((65535 << 8) + 255 as u32);
+    // sm.set_clkdiv(0);
 
     let pio::Wrap { source, target } = relocated.wrap();
     sm.set_wrap(source, target);
 
     //     sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
     sm.set_enable(true);
+    // sm.wait_push().await as i32;
+    // sm.push_tx(1);
+    sm.wait_push(125_000_000).await;
     info!("started");
 
-    // loop {
-
-    //     sm.wait_irq(3).await;
-    //     info!("IRQ trigged");
-    // }
+    loop {
+        sm.wait_irq(3).await;
+        {
+            info!("blink: Acquiring lock");
+            let val = COUNTER.lock().await;
+            info!("IRQ trigged, counter={}", *val);
+        }
+    }
 }
 
 #[embassy_executor::task]
 async fn pio_task_quadrature(mut sm: PioStateMachineInstance<Pio0, Sm0>, a_pin: AnyPin, b_pin: AnyPin) {
     info!("preparing quadrature encoder pio");
+    let prg = pio_proc::pio_file!("src/encoder.pio");
+    // let prg = prg_with_defines;
 
-    let prg = pio_proc::pio_asm!(
-        "
-.origin 12
-start:
-    wait 0 pin 0            ; wait for B == 0
-    jmp pin, wait_high      ; if A == 0
-    mov x, !x                   ; x++ {
-    jmp x--, nop1               ;
-nop1:                           ;
-    mov x, !x                   ; }
-; BUG?!?! NO JMP OVER ELSE HERE?!  somehow it works though!?
-wait_high:
-    jmp x--, nop2           ; x-- {
-nop2:                       ; }
-
-    wait 1 pin 0            ; wait for B == 1
-    jmp pin, wait_low       ; if A == 0
-    jmp x--, nop3               ; x-- {
-nop3:                           ; }
-wait_low:                   ; else
-    mov x, !x                   ; x++ {
-    jmp x--, nop4               ;
-nop4:                           ;
-    mov x, !x                   ;
-    jmp start                   ; }
-        "
-    );
-
-    let relocated = RelocatedProgram::new(&prg.program);
+    let relocated = RelocatedProgram::new_with_origin(&prg.program, 12);
     let in_pin = sm.make_pio_pin(b_pin);
     let jmp_pin = sm.make_pio_pin(a_pin);
     sm.set_in_base_pin(&in_pin);
@@ -114,8 +102,8 @@ nop4:                           ;
     // sm.set_
     sm.write_instr(relocated.origin() as usize, relocated.code());
     pio_instr_util::exec_jmp(&mut sm, relocated.origin());
-    // sm.set_clkdiv(0);
-    sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
+    sm.set_clkdiv(1);
+    // sm.set_clkdiv((125e6 / 20.0 / 2e2 * 256.0) as u32);
 
     let pio::Wrap { source, target } = relocated.wrap();
     sm.set_wrap(source, target);
@@ -134,14 +122,27 @@ nop4:                           ;
     };
 
     let instruction_in_x_32 = instr.encode(pio::SideSet::default());
+    let instr2 = &pio::Instruction {
+        operands: pio::InstructionOperands::SET {
+            destination: pio::SetDestination::X,
+            data: 0,
+        },
+        delay: 0,
+        side_set: None,
+    };
+    let instruction_set_x_0 = instr2.encode(pio::SideSet::default());
     loop {
+        Timer::after(Duration::from_millis(10)).await;
         sm.exec_instr(instruction_in_x_32);
-        let rx = sm.wait_pull().await;
-        info!("Pulled {} from FIFO", rx);
-        Timer::after(Duration::from_secs(1)).await;
-
-        //     sm.wait_irq(3).await;
-        //     info!("IRQ trigged");
+        sm.exec_instr(instruction_set_x_0);
+        let rx = sm.wait_pull().await as i32;
+        // info!("Pulled {} from FIFO", rx);
+        // {
+        // info!("QUAD: Acquiring lock");
+        let mut val = COUNTER.lock().await;
+        *val += rx;
+        // info!("QUAD: Updated value to {}", *val);
+        // }
     }
 }
 
@@ -279,6 +280,11 @@ async fn main(spawner: Spawner) {
 
     let style_green = MonoTextStyle::new(&FONT_10X20, Rgb565::GREEN);
     let style_red = MonoTextStyle::new(&FONT_10X20, Rgb565::RED);
+    let filled_background = MonoTextStyleBuilder::new()
+        .font(&FONT_10X20)
+        .text_color(Rgb565::YELLOW)
+        .background_color(Rgb565::BLUE)
+        .build();
     let my_str = "MERRY CHRISTMAS";
     let mut x = 40;
     let mut alt_color = false;
@@ -288,30 +294,33 @@ async fn main(spawner: Spawner) {
     //     .unwrap();
 
     loop {
-        // Text::new("MERRY CHRISTMAS\n", Point::new(0, 20), style_green)
-        //     .draw(&mut display)
-        //     .unwrap();
-        // Timer::after(Duration::from_secs(1)).await;
-        // Text::new("MERRY CHRISTMAS\n", Point::new(0, 20), style_red)
-        //     .draw(&mut display)
-        //     .unwrap();
-        for (i, c) in my_str.chars().enumerate() {
-            let mut tmp = [0u8; 4];
-            let letter = c.encode_utf8(&mut tmp);
-            Text::new(
-                letter,
-                Point::new(x, 20),
-                if alt_color { style_red } else { style_green },
-            )
+        let val_clone = {
+            let val = COUNTER.lock().await;
+            val.clone()
+        };
+        let val = arrform!(32, "value: {:4}", val_clone);
+        let val = val.as_str();
+        Text::new(val, Point::new(0, 60), filled_background)
             .draw(&mut display)
             .unwrap();
-            alt_color = !alt_color;
-            x += 10;
-        }
-        // alt_color = !alt_color;
-        x = 40;
 
-        Timer::after(Duration::from_secs(1)).await;
+        // for (i, c) in my_str.chars().enumerate() {
+        //     let mut tmp = [0u8; 4];
+        //     let letter = c.encode_utf8(&mut tmp);
+        //     Text::new(
+        //         letter,
+        //         Point::new(x, 20),
+        //         if alt_color { style_red } else { style_green },
+        //     )
+        //     .draw(&mut display)
+        //     .unwrap();
+        //     alt_color = !alt_color;
+        //     x += 10;
+        // }
+        // // alt_color = !alt_color;
+        // x = 40;
+
+        Timer::after(Duration::from_millis(10)).await;
     }
     // spawner.spawn(pio_task_sm0(sm0, p.PIN_0.degrade())).unwrap();
     // spawner.spawn(pio_task_sm1(sm1)).unwrap();

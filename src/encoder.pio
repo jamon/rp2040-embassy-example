@@ -1,0 +1,24 @@
+; .origin 12
+.program encoder
+start:
+    wait 0 pin 0            ; wait for B == 0
+    jmp pin, wait_high      ; if A == 0
+    mov x, !x                   ; x++ {
+    jmp x--, nop1               ;
+nop1:                           ;
+    mov x, !x                   ; }
+; BUG?!?! NO JMP OVER ELSE HERE?!  somehow it works though!?
+wait_high:
+    jmp x--, nop2           ; x-- {
+nop2:                       ; }
+
+    wait 1 pin 0            ; wait for B == 1
+    jmp pin, wait_low       ; if A == 0
+    jmp x--, nop3               ; x-- {
+nop3:                           ; }
+wait_low:                   ; else
+    mov x, !x                   ; x++ {
+    jmp x--, nop4               ;
+nop4:                           ;
+    mov x, !x                   ;
+    jmp start                   ; }

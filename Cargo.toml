@@ -36,6 +36,8 @@ embedded-storage = { version = "0.3" }
 static_cell = "1.0.0"
 log = "0.4"
 
+arrform = "0.1"
+
 [profile.release]
 debug = true
 
