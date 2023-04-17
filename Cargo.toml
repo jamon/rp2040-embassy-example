@@ -6,43 +6,78 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt", "nightly"] }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt", "integrated-timers", "nightly"] }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt", "defmt-timestamp-uptime", "nightly"] }
-embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt", "unstable-traits", "nightly", "unstable-pac", "time-driver", "pio", "nightly"] }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt"] }
-embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215", features = ["defmt", "nightly", "tcp", "dhcpv4", "medium-ethernet", "pool-16", "nightly"] }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215" }
-embassy-usb-logger = { git = "https://github.com/embassy-rs/embassy.git", rev = "47747d3b73f392e53ead8ff49cd09fd017df3215" }
+embassy-embedded-hal = { version = "0.1.0", path = "../embassy/embassy-embedded-hal", features = [
+    "defmt",
+] }
+embassy-sync = { version = "0.2.0", path = "../embassy/embassy-sync", features = [
+    "defmt",
+] }
+embassy-executor = { version = "0.1.0", path = "../embassy/embassy-executor", features = [
+    "arch-cortex-m",
+    "executor-thread",
+    "defmt",
+    "integrated-timers",
+] }
+embassy-time = { version = "0.1.0", path = "../embassy/embassy-time", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+] }
+embassy-rp = { version = "0.1.0", path = "../embassy/embassy-rp", features = [
+    "defmt",
+    "unstable-traits",
+    "nightly",
+    "unstable-pac",
+    "time-driver",
+    "pio",
+    "critical-section-impl",
+] }
+embassy-usb = { version = "0.1.0", path = "../embassy/embassy-usb", features = [
+    "defmt",
+] }
+embassy-net = { version = "0.1.0", path = "../embassy/embassy-net", features = [
+    "defmt",
+    "nightly",
+    "tcp",
+    "dhcpv4",
+    "medium-ethernet",
+] }
+embassy-futures = { version = "0.1.0", path = "../embassy/embassy-futures" }
+embassy-usb-logger = { version = "0.1.0", path = "../embassy/embassy-usb-logger" }
 
 defmt = "0.3"
-defmt-rtt = "0.3"
-pio = "0.2"
-pio-proc = "0.2"
-cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
+defmt-rtt = "0.4"
+
+#cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
+cortex-m = { version = "0.7.6" }
 cortex-m-rt = "0.7.0"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
-futures = { version = "0.3.17", default-features = false, features = ["async-await", "cfg-target-has-atomic", "unstable"] }
+futures = { version = "0.3.17", default-features = false, features = [
+    "async-await",
+    "cfg-target-has-atomic",
+    "unstable",
+] }
 display-interface-spi = "0.4.1"
 embedded-graphics = "0.7.1"
 st7789 = "0.6.1"
 display-interface = "0.4.1"
 byte-slice-cast = { version = "1.2.0", default-features = false }
+smart-leds = "0.3.0"
 
-embedded-hal-1 = { package = "embedded-hal", version = "=1.0.0-alpha.9" }
-embedded-hal-async = "0.2.0-alpha.0"
+embedded-hal-1 = { package = "embedded-hal", version = "=1.0.0-alpha.10" }
+embedded-hal-async = "0.2.0-alpha.1"
 embedded-io = { version = "0.4.0", features = ["async", "defmt"] }
 embedded-storage = { version = "0.3" }
 static_cell = "1.0.0"
 log = "0.4"
-
+pio = "0.2.1"
+pio-proc = "0.2"
 arrform = "0.1"
 
 [profile.release]
 debug = true
 
-[patch.crates-io]
-pio = {git = "https://github.com/rp-rs/pio-rs.git"}
+# [patch.crates-io]
+# pio = { git = "https://github.com/rp-rs/pio-rs.git" }
 
 
 # cortex-m = "0.7.3"
@@ -63,7 +98,3 @@ pio = {git = "https://github.com/rp-rs/pio-rs.git"}
 # embassy-rp = {git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
 # embassy-hal-common = {git = "https://github.com/embassy-rs/embassy" }
 # embassy-macros = {git = "https://github.com/embassy-rs/embassy", features = ["rp"]}
-
-
-
-
